@@ -1,13 +1,13 @@
 import { toast } from "react-toastify";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export async function submitScore(scoreData, token) {
   if (!token) return { success: false, reason: "unauthenticated" };
 
   try {
-    const res = await fetch(`${API_BASE_URL}/scores`, {
+    const res = await fetch(`${API_BASE_URL}/api/scores`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -39,7 +39,7 @@ export async function reportRoundComplete(
   const currentSeasonId = new Date().toISOString().slice(0, 7);
 
   try {
-    await fetch(`${API_BASE_URL}/stats/round-complete`, {
+    await fetch(`${API_BASE_URL}/api/stats/round-complete`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -48,7 +48,7 @@ export async function reportRoundComplete(
       body: JSON.stringify({ mode, timeTakenSeconds }),
     });
 
-    await fetch(`${API_BASE_URL}/stats/mode-achievement`, {
+    await fetch(`${API_BASE_URL}/api/stats/mode-achievement`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -70,7 +70,7 @@ export async function fetchUserProfileData(token) {
   if (!token) return null;
 
   try {
-    const res = await fetch(`${API_BASE_URL}/user/profile-data`, {
+    const res = await fetch(`${API_BASE_URL}/api/user/profile-data`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -90,7 +90,7 @@ export async function updateUserProfile({ firstName, lastName }, token) {
   if (!token) return { success: false };
 
   try {
-    const res = await fetch(`${API_BASE_URL}/user/profile`, {
+    const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -118,7 +118,7 @@ export async function fetchLeaderboard({ region, type, mode }) {
       mode: mode || "expert",
     });
 
-    const res = await fetch(`${API_BASE_URL}/leaderboard?${params.toString()}`);
+    const res = await fetch(`${API_BASE_URL}/api/leaderboard?${params.toString()}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to fetch leaderboard");
     return data.leaderboard || [];
@@ -132,7 +132,7 @@ export async function fetchUserRank({ token, mode, region }) {
 
   try {
     const params = new URLSearchParams({ mode, region });
-    const res = await fetch(`${API_BASE_URL}/user/rank?${params.toString()}`, {
+    const res = await fetch(`${API_BASE_URL}/api/user/rank?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -150,7 +150,7 @@ export async function fetchHallOfFameArchives({ season_type, mode }) {
   try {
     const params = new URLSearchParams({ season_type, mode });
     const res = await fetch(
-      `${API_BASE_URL}/leaderboard/archives?${params.toString()}`,
+      `${API_BASE_URL}/api/leaderboard/archives?${params.toString()}`,
     );
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to fetch archives");
