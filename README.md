@@ -20,7 +20,7 @@ Create a `.env` file in the root directory:
 ```env
 VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-VITE_API_URL=https://flash-memory-backend.vercel.app/api
+VITE_API_URL=Backend Server URl
 ```
 
 ---
