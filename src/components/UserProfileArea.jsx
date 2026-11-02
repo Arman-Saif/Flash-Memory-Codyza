@@ -1,555 +1,370 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
-  Button,
-  Card,
-  CardContent,
+  Tabs,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
   Avatar,
-  IconButton,
   Chip,
-  TextField,
-  Stack,
+  Button,
+  CircularProgress,
 } from "@mui/material";
-import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
-import DownloadIcon from "@mui/icons-material/Download";
-import WhatshotIcon from "@mui/icons-material/Whatshot";
-import VerifiedIcon from "@mui/icons-material/Verified";
-import SaveIcon from "@mui/icons-material/Save";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import ShareIcon from "@mui/icons-material/Share";
+import { MODES } from "../config/constants";
+import { getLeaderboard, getUserRank } from "../services/api";
 import { toast } from "react-toastify";
-import html2canvas from "html2canvas";
-import { fetchUserProfileData, updateUserProfile } from "../services/api";
 
-const formatAchievementLabel = (ach) => {
-  if (!ach) return "";
-  const baseName = ach.achievement_name || "Achievement";
-  const mult = Number(ach.multiplier) || 1;
-  return mult > 1 ? `${baseName} (${mult}x)` : baseName;
-};
-
-function CyberGamerCard({
-  user,
-  region = "Asia",
-  achievements = [],
-  streak = 0,
-  displayName,
-}) {
-  return (
-    <Box
-      id="gamer-card-container"
-      sx={{
-        width: 450,
-        p: 4,
-        background: "linear-gradient(135deg, #0a0f1d 0%, #111827 100%)",
-        border: "2px solid #00f2fe",
-        borderRadius: 4,
-        boxShadow: "0 0 40px rgba(0, 242, 254, 0.25)",
-        color: "#fff",
-        fontFamily: '"Roboto", "Inter", sans-serif',
-        position: "relative",
-        overflow: "hidden",
-        boxSizing: "border-box",
-      }}
-    >
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-        }}
-      >
-        <Typography
-          variant="subtitle2"
-          sx={{ fontWeight: 900, letterSpacing: 2, color: "#00f2fe" }}
-        >
-          Number Flash
-        </Typography>
-        <Chip
-          label={`📍 ${region.toUpperCase()}`}
-          size="small"
-          sx={{
-            bgcolor: "rgba(0, 242, 254, 0.1)",
-            color: "#00f2fe",
-            fontWeight: 700,
-            border: "1px solid rgba(0, 242, 254, 0.3)",
-          }}
-        />
-      </Box>
-
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, mb: 3 }}>
-        <Avatar
-          src={user?.avatar}
-          slotProps={{ htmlImg: { crossOrigin: "anonymous" } }}
-          sx={{
-            width: 80,
-            height: 80,
-            border: "3px solid #8b5cf6",
-            boxShadow: "0 0 20px rgba(139, 92, 246, 0.4)",
-          }}
-        />
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 900 }}>
-            {displayName || "Player"}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              color: "rgba(255, 255, 255, 0.6)",
-              fontFamily: "monospace",
-              mt: 0.5,
-            }}
-          >
-            {user?.email || ""}
-          </Typography>
-        </Box>
-      </Box>
-
-      <Box
-        sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mb: 3 }}
-      >
-        <Box
-          sx={{
-            p: 2,
-            borderRadius: 2,
-            bgcolor: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0.5,
-              color: "#f97316",
-              mb: 0.5,
-            }}
-          >
-            <WhatshotIcon fontSize="small" />
-            <Typography variant="caption" sx={{ fontWeight: 700 }}>
-              TOP 10 STREAK
-            </Typography>
-          </Box>
-          <Typography
-            variant="h4"
-            sx={{ fontWeight: 900, fontFamily: "monospace", color: "#f97316" }}
-          >
-            {streak} Seasons
-          </Typography>
-        </Box>
-
-        <Box
-          sx={{
-            p: 2,
-            borderRadius: 2,
-            bgcolor: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              fontWeight: 700,
-              color: "rgba(255, 255, 255, 0.6)",
-              display: "block",
-              mb: 0.5,
-            }}
-          >
-            RANK TIER
-          </Typography>
-          <Typography
-            variant="h5"
-            sx={{ fontWeight: 900, fontFamily: "monospace", color: "#00f2fe" }}
-          >
-            {streak > 0 ? "ELITE 🏆" : "UNRANKED"}
-          </Typography>
-        </Box>
-      </Box>
-
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          variant="caption"
-          sx={{
-            fontWeight: 700,
-            color: "rgba(255, 255, 255, 0.6)",
-            display: "block",
-            mb: 1.5,
-          }}
-        >
-          UNLOCKED ACHIEVEMENTS
-        </Typography>
-        {achievements.length === 0 ? (
-          <Typography
-            variant="body2"
-            sx={{ color: "rgba(255, 255, 255, 0.4)", fontStyle: "italic" }}
-          >
-            No achievements unlocked yet.
-          </Typography>
-        ) : (
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            {achievements.map((ach, idx) => (
-              <Chip
-                key={idx}
-                icon={
-                  <VerifiedIcon
-                    sx={{
-                      fontSize: "14px !important",
-                      color: "#8b5cf6 !important",
-                    }}
-                  />
-                }
-                label={formatAchievementLabel(ach)}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(139, 92, 246, 0.1)",
-                  color: "#fff",
-                  fontWeight: 700,
-                  border: "1px solid rgba(139, 92, 246, 0.3)",
-                }}
-              />
-            ))}
-          </Box>
-        )}
-      </Box>
-
-      <Box
-        sx={{
-          pt: 2,
-          borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{
-            fontFamily: "monospace",
-            color: "rgba(255, 255, 255, 0.5)",
-            fontSize: "0.7rem",
-          }}
-        >
-          {user?.accountUrl}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{
-            fontWeight: 900,
-            color: "rgba(255, 255, 255, 0.3)",
-            fontSize: "0.7rem",
-            letterSpacing: 1,
-          }}
-        >
-          POWERED BY CODYZA
-        </Typography>
-      </Box>
-    </Box>
-  );
-}
-
-export default function UserProfileArea({
-  user,
-  region,
-  onImageUpload,
-  onSignOut,
-  onBack,
-}) {
-  const fileInputRef = useRef(null);
-  const [dbData, setDbData] = useState({ streak: 0, achievements: [] });
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+export default function ScoreboardHub({ region, user, onSelectPublicProfile }) {
+  const navigate = useNavigate();
+  const [selectedMode, setSelectedMode] = useState("easy");
+  const [leaderboardType, setLeaderboardType] = useState("all"); // 'all', 'weekly', 'monthly', 'seasonal'
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [seasonStartedAt, setSeasonStartedAt] = useState(null);
+  const [seasonEndsAt, setSeasonEndsAt] = useState(null);
+  const [userRankData, setUserRankData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let isMounted = true;
-    if (user?.token) {
-      fetchUserProfileData(user.token).then((data) => {
-        if (isMounted && data && data.success) {
-          setDbData({
-            streak: data.streak || 0,
-            achievements: data.achievements || [],
-          });
-          if (data.firstName) setFirstName(data.firstName);
-          if (data.lastName) setLastName(data.lastName);
-        }
-      });
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [user, user?.token]);
+    fetchLeaderboardData();
+  }, [selectedMode, leaderboardType, region]);
 
-  const handleSaveName = async (e) => {
-    e.preventDefault();
-    if (!user?.token) return;
-    setIsSaving(true);
-    await updateUserProfile({ firstName, lastName }, user.token);
-    setIsSaving(false);
-  };
-
-  const downloadGamerCard = async () => {
-    const cardElement = document.getElementById("gamer-card-container");
-    if (!cardElement) return;
-
+  const fetchLeaderboardData = async () => {
+    setLoading(true);
     try {
-      toast.info("Generating your Cyber-ID card...");
-      const canvas = await html2canvas(cardElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#0a0f1d",
+      const res = await getLeaderboard({
+        mode: selectedMode,
+        type: leaderboardType,
+        region,
+        limit: 100,
       });
-      const imageLink = document.createElement("a");
-      const cleanName =
-        `${firstName} ${lastName}`.trim() || user?.name || "player";
-      imageLink.download = `${cleanName.toLowerCase().replace(/\s+/g, "-")}-gamer-card.png`;
-      imageLink.href = canvas.toDataURL("image/png");
-      imageLink.click();
-      toast.success("Gamer Card downloaded successfully!");
+
+      if (res && res.success) {
+        setLeaderboardData(res.leaderboard || []);
+        setSeasonStartedAt(res.seasonStartedAt || null);
+        setSeasonEndsAt(res.seasonEndsAt || null);
+      } else {
+        setLeaderboardData([]);
+        setSeasonStartedAt(null);
+        setSeasonEndsAt(null);
+      }
+
+      if (user && user.token) {
+        const rankRes = await getUserRank(user.token, region, selectedMode);
+        if (rankRes && rankRes.success) {
+          setUserRankData(rankRes);
+        }
+      }
     } catch (err) {
-      console.error("Gamer card generation error:", err);
-      toast.error("Failed to generate gamer card image.");
+      console.error("Error loading leaderboard:", err);
+      toast.error("Failed to load leaderboard scores.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const computedDisplayName =
-    `${firstName} ${lastName}`.trim() || user?.name || "Player";
+  const handleCopyProfileLink = (profileUrl, e) => {
+    e.stopPropagation(); // Prevents row click navigation when clicking the share button
+    const fullUrl = `${window.location.origin}/profile/${profileUrl}`;
+    navigator.clipboard.writeText(fullUrl);
+    toast.success("Public profile link copied to clipboard!");
+  };
+
+  const handleRowClick = (profileUrl) => {
+    if (!profileUrl) return;
+    // Route cleanly using React Router or fallback callback
+    if (onSelectPublicProfile) {
+      onSelectPublicProfile(profileUrl);
+    } else {
+      navigate(`/profile/${profileUrl}`);
+    }
+  };
 
   return (
-    <Box sx={{ maxWidth: 800, mx: "auto", py: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4,
-        }}
-      >
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>
-          Player Profile
-        </Typography>
-        <Button onClick={onBack} variant="outlined">
-          ← Back
-        </Button>
-      </Box>
-
-      <Box
-        sx={{
-          mb: 6,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-        }}
-      >
+    <Box
+      sx={{
+        maxWidth: 950,
+        mx: "auto",
+        py: { xs: 2, md: 4 },
+        px: { xs: 1.5, md: 0 },
+      }}
+    >
+      {/* Header */}
+      <Box sx={{ textAlign: "center", mb: 4 }}>
         <Typography
-          variant="h6"
-          sx={{ fontWeight: 700, mb: 2, alignSelf: "flex-start" }}
-        >
-          🎮 Shareable Cyber-ID Gamer Card
-        </Typography>
-        <Box sx={{ mb: 3 }}>
-          <CyberGamerCard
-            user={user}
-            region={region}
-            achievements={dbData.achievements}
-            streak={dbData.streak}
-            displayName={computedDisplayName}
-          />
-        </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          size="large"
-          startIcon={<DownloadIcon />}
-          onClick={downloadGamerCard}
+          variant="h3"
           sx={{
-            fontWeight: "bold",
-            textTransform: "none",
-            px: 4,
-            py: 1.5,
-            borderRadius: 2,
+            fontWeight: 900,
+            mb: 1,
+            fontSize: { xs: "2rem", sm: "2.5rem" },
           }}
         >
-          Download Gamer Card (PNG)
-        </Button>
+          Global Leaderboard
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Live rankings across all regions and game modes.
+        </Typography>
       </Box>
 
-      <Card
+      {/* Mode Selection Tabs */}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          mb: 3,
+          overflowX: "auto",
+        }}
+      >
+        <Tabs
+          value={selectedMode}
+          onChange={(e, val) => setSelectedMode(val)}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          {Object.entries(MODES).map(([key, mode]) => (
+            <Tab
+              key={key}
+              label={mode.name}
+              value={key}
+              sx={{ fontWeight: "bold" }}
+            />
+          ))}
+        </Tabs>
+      </Box>
+
+      {/* Timeline Filter Tabs (All-Time, Weekly, Monthly, Seasonal) */}
+      <Box sx={{ display: "flex", justifyContent: "center", mb: 3 }}>
+        <Tabs
+          value={leaderboardType}
+          onChange={(e, val) => setLeaderboardType(val)}
+          textColor="secondary"
+          indicatorColor="secondary"
+        >
+          <Tab label="All-Time" value="all" />
+          <Tab label="Weekly" value="weekly" />
+          <Tab label="Monthly" value="monthly" />
+          <Tab label="Seasonal" value="seasonal" />
+        </Tabs>
+      </Box>
+
+      {/* Season Timer / Date Range Banner (Only renders when NOT 'all' time) */}
+      {leaderboardType !== "all" && seasonStartedAt && seasonEndsAt && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            bgcolor: "rgba(59, 130, 246, 0.08)",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+            borderRadius: 3,
+            p: 2,
+            mb: 4,
+            flexWrap: "wrap",
+            gap: 1.5,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            Season Start:{" "}
+            <strong>{new Date(seasonStartedAt).toLocaleDateString()}</strong>
+          </Typography>
+          <Chip
+            label={`Active ${leaderboardType.toUpperCase()} Season`}
+            color="primary"
+            size="small"
+            variant="outlined"
+            sx={{ fontWeight: "bold" }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            Season Ends:{" "}
+            <strong>{new Date(seasonEndsAt).toLocaleDateString()}</strong>
+          </Typography>
+        </Box>
+      )}
+
+      {/* Active User Current Standing Card */}
+      {user && userRankData && (
+        <Box
+          sx={{
+            bgcolor: "rgba(99, 102, 241, 0.08)",
+            border: "1px solid rgba(99, 102, 241, 0.25)",
+            borderRadius: 3,
+            p: 2.5,
+            mb: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 2,
+            cursor: user.profileUrl ? "pointer" : "default",
+          }}
+          onClick={() => user.profileUrl && handleRowClick(user.profileUrl)}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Avatar src={user.avatar} sx={{ width: 44, height: 44 }} />
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                {user.name} (Your Current Rank)
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Region: {region} | High Score: {userRankData.score || 0}
+              </Typography>
+            </Box>
+          </Box>
+          <Chip
+            icon={<EmojiEventsIcon />}
+            label={
+              userRankData.rank ? `#${userRankData.rank} Global` : "Unranked"
+            }
+            color="secondary"
+            sx={{ fontWeight: "bold", fontSize: "0.95rem", py: 2, px: 1 }}
+          />
+        </Box>
+      )}
+
+      {/* Leaderboard Table */}
+      <TableContainer
+        component={Paper}
         sx={{
           bgcolor: "rgba(255,255,255,0.02)",
           border: "1px solid rgba(255,255,255,0.08)",
           borderRadius: 3,
-          p: 3,
-          mb: 4,
         }}
       >
-        <CardContent sx={{ textAlign: "center" }}>
-          <Box
-            sx={{
-              position: "relative",
-              width: 110,
-              height: 110,
-              mx: "auto",
-              mb: 2,
-            }}
-          >
-            <Avatar
-              src={user?.avatar}
-              sx={{ width: 110, height: 110, border: "3px solid #00f2fe" }}
-            />
-            <input
-              type="file"
-              ref={fileInputRef}
-              hidden
-              accept="image/*"
-              onChange={onImageUpload}
-            />
-            <IconButton
-              onClick={() => fileInputRef.current?.click()}
-              sx={{
-                position: "absolute",
-                bottom: 0,
-                right: 0,
-                bgcolor: "#8b5cf6",
-                color: "#fff",
-                "&:hover": { bgcolor: "#7c3aed" },
-              }}
-            >
-              <PhotoCameraIcon fontSize="small" />
-            </IconButton>
-          </Box>
-
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>
-            {computedDisplayName}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            {user?.email}
-          </Typography>
-
-          <Box
-            component="form"
-            onSubmit={handleSaveName}
-            sx={{
-              mb: 4,
-              p: 3,
-              bgcolor: "rgba(255,255,255,0.02)",
-              borderRadius: 2,
-              border: "1px solid rgba(255,255,255,0.05)",
-            }}
-          >
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, mb: 2, textAlign: "left" }}
-            >
-              ✏️ Edit Official Database Name
-            </Typography>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={2}
-              sx={{ mb: 2 }}
-            >
-              <TextField
-                fullWidth
-                label="First Name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                size="small"
-              />
-              <TextField
-                fullWidth
-                label="Last Name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                size="small"
-              />
-            </Stack>
-            <Button
-              type="submit"
-              variant="contained"
-              color="secondary"
-              startIcon={<SaveIcon />}
-              disabled={isSaving}
-              sx={{ float: "right", textTransform: "none", fontWeight: "bold" }}
-            >
-              {isSaving ? "Saving..." : "Save Name to Database"}
-            </Button>
-            <Box sx={{ clear: "both" }} />
-          </Box>
-
-          <Box
-            sx={{ display: "flex", justifyContent: "center", gap: 3, my: 3 }}
-          >
-            <Box
-              sx={{
-                textAlign: "center",
-                px: 2,
-                py: 1,
-                borderRadius: 2,
-                bgcolor: "rgba(249, 115, 22, 0.1)",
-              }}
-            >
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 0.5,
-                  color: "#f97316",
-                }}
-              >
-                <WhatshotIcon />
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                  {dbData.streak} Seasons
-                </Typography>
-              </Box>
-              <Typography variant="caption" color="text.secondary">
-                Top 10 Streak
-              </Typography>
-            </Box>
-          </Box>
-
-          <Box sx={{ my: 3, textAlign: "left" }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, mb: 1, color: "text.secondary" }}
-            >
-              Unlocked Achievements
-            </Typography>
-            {dbData.achievements.length === 0 ? (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontStyle: "italic" }}
-              >
-                No achievements unlocked yet. Play matches and conquer season
-                goals to earn badges!
-              </Typography>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700, width: "80px" }}>
+                Rank
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Player</TableCell>
+              <TableCell sx={{ fontWeight: 700 }} align="center">
+                Server
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700 }} align="right">
+                Score
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700 }} align="right">
+                Share
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <CircularProgress size={32} />
+                </TableCell>
+              </TableRow>
+            ) : leaderboardData.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  align="center"
+                  sx={{ py: 5, color: "text.secondary" }}
+                >
+                  No high scores recorded for this filter yet. Be the first to
+                  set a record!
+                </TableCell>
+              </TableRow>
             ) : (
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                {dbData.achievements.map((ach, idx) => (
-                  <Chip
-                    key={idx}
-                    icon={<VerifiedIcon sx={{ fontSize: "16px !important" }} />}
-                    label={formatAchievementLabel(ach)}
-                    color="primary"
-                    variant="outlined"
-                  />
-                ))}
-              </Box>
+              leaderboardData.map((row, idx) => {
+                const rank = idx + 1;
+                return (
+                  <TableRow
+                    key={row.userId || idx}
+                    hover
+                    onClick={() => handleRowClick(row.profileUrl)}
+                    sx={{
+                      cursor: row.profileUrl ? "pointer" : "default",
+                      bgcolor:
+                        user && user.id === row.userId
+                          ? "rgba(59, 130, 246, 0.12)"
+                          : "transparent",
+                    }}
+                  >
+                    <TableCell
+                      sx={{ fontWeight: 800, fontFamily: "monospace" }}
+                    >
+                      {rank === 1
+                        ? "🥇"
+                        : rank === 2
+                          ? "🥈"
+                          : rank === 3
+                            ? "🥉"
+                            : `#${rank}`}
+                    </TableCell>
+                    <TableCell>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
+                        }}
+                      >
+                        <Avatar
+                          src={row.avatar}
+                          sx={{ width: 34, height: 34 }}
+                        />
+                        <Box>
+                          <Typography
+                            sx={{ fontWeight: 700, fontSize: "0.95rem" }}
+                          >
+                            {row.username}
+                          </Typography>
+                          {row.streak > 0 && (
+                            <Typography variant="caption" color="warning.main">
+                              🔥 {row.streak} Season Streak
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        label={row.region}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontFamily: "monospace",
+                        fontWeight: 900,
+                        fontSize: "1.1rem",
+                        color: "primary.main",
+                      }}
+                    >
+                      {row.score}
+                    </TableCell>
+                    <TableCell align="right">
+                      {row.profileUrl && (
+                        <Button
+                          size="small"
+                          onClick={(e) =>
+                            handleCopyProfileLink(row.profileUrl, e)
+                          }
+                          sx={{ minWidth: "auto", p: 0.8 }}
+                        >
+                          <ShareIcon fontSize="small" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
-          </Box>
-        </CardContent>
-      </Card>
-
-      <Button
-        variant="outlined"
-        color="error"
-        fullWidth
-        onClick={onSignOut}
-        sx={{ py: 1.2 }}
-      >
-        Sign Out
-      </Button>
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Box>
   );
 }
