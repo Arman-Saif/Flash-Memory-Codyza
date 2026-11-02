@@ -1,8 +1,7 @@
 import React from "react";
 import { Box, Typography, Button, Card, CardContent } from "@mui/material";
-import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import InteractiveTitleFlashCard from "./InteractiveTitleFlashCard";
+import LeaderboardIcon from "@mui/icons-material/Leaderboard";
 import { MODES } from "../config/constants";
 
 export default function HomeScreen({
@@ -11,79 +10,138 @@ export default function HomeScreen({
   onOpenHallOfFame,
 }) {
   return (
-    <Box sx={{ textAlign: "center", py: 4 }}>
-      <InteractiveTitleFlashCard />
-      <Typography variant="h6" color="text.secondary" sx={{ mt: 1, mb: 5 }}>
-        How many numbers can you remember?
-      </Typography>
-      <Box sx={{ display: "flex", justifyContent: "center", gap: 2, mb: 6 }}>
-        <Button
-          variant="outlined"
-          color="primary"
-          startIcon={<LeaderboardIcon />}
-          onClick={onOpenScoreboard}
-          sx={{ textTransform: "none", px: 3, borderRadius: 2 }}
+    <Box
+      sx={{
+        py: { xs: 3, md: 6 },
+        px: { xs: 2, md: 0 },
+        maxWidth: 1000,
+        mx: "auto",
+      }}
+    >
+      {/* Hero Section */}
+      <Box sx={{ textAlign: "center", mb: 6 }}>
+        <Typography
+          variant="h3"
+          sx={{ fontWeight: 900, mb: 1, fontSize: { xs: "2rem", sm: "3rem" } }}
         >
-          View Scoreboards
-        </Button>
-        <Button
-          variant="outlined"
-          color="secondary"
-          startIcon={<EmojiEventsIcon />}
-          onClick={onOpenHallOfFame}
-          sx={{ textTransform: "none", px: 3, borderRadius: 2 }}
+          Test Your Mental Agility
+        </Typography>
+        <Typography
+          variant="body1"
+          color="text.secondary"
+          sx={{ mb: 3, maxWidth: 600, mx: "auto" }}
         >
-          Hall of Fame
-        </Button>
+          Memorize flashing number sequences, beat your personal limits, and
+          compete globally on the unified live leaderboard.
+        </Typography>
+
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<LeaderboardIcon />}
+            onClick={onOpenScoreboard}
+            sx={{ fontWeight: "bold", textTransform: "none", px: 3 }}
+          >
+            Global Leaderboard
+          </Button>
+          <Button
+            variant="outlined"
+            size="large"
+            startIcon={<EmojiEventsIcon />}
+            onClick={onOpenHallOfFame}
+            sx={{ fontWeight: "bold", textTransform: "none", px: 3 }}
+          >
+            Hall of Fame
+          </Button>
+        </Box>
       </Box>
+
+      {/* Mode Selection Flex Container (Side-by-side or stacks if it doesn't fit) */}
+      <Typography variant="h5" sx={{ fontWeight: 800, mb: 3 }}>
+        Select Game Mode
+      </Typography>
+
       <Box
         sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "1fr 1fr",
-            md: "repeat(3, 1fr)",
-          },
+          display: "flex",
+          flexWrap: "wrap",
           gap: 3,
+          justifyContent: "center",
         }}
       >
         {Object.entries(MODES).map(([key, mode]) => (
-          <Card
+          <Box
             key={key}
-            onClick={() => onSelectMode(key)}
             sx={{
-              cursor: "pointer",
-              background: "rgba(255,255,255,0.02)",
-              border: `1px solid rgba(255,255,255,0.08)`,
-              borderRadius: 3,
-              transition: "all 0.3s ease",
-              "&:hover": {
-                transform: "translateY(-4px)",
-                borderColor: mode.color,
-                boxShadow: `0 8px 30px rgba(0,0,0,0.4)`,
+              flex: {
+                xs: "1 1 100%",
+                sm: "1 1 calc(50% - 16px)",
+                md: "1 1 calc(33.333% - 24px)",
               },
+              maxWidth: { xs: "100%", sm: "calc(50% - 16px)", md: "320px" },
             }}
           >
-            <CardContent sx={{ p: 4, textAlign: "left" }}>
-              <Box
+            <Card
+              sx={{
+                height: "100%",
+                bgcolor: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 3,
+                transition: "all 0.2s ease-in-out",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  borderColor: "primary.main",
+                  bgcolor: "rgba(59, 130, 246, 0.03)",
+                },
+              }}
+            >
+              <CardContent
                 sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  bgcolor: mode.color,
-                  mb: 2,
+                  p: 3,
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "100%",
                 }}
-              />
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-                {mode.name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {key === "legend"
-                  ? "Starts with 15 digits, increases randomly (7-20 range)"
-                  : `Starts with ${mode.start} numbers, increases by +${mode.step} per round`}
-              </Typography>
-            </CardContent>
-          </Card>
+              >
+                <Typography
+                  variant="h6"
+                  sx={{ fontWeight: 800, color: mode.color, mb: 2 }}
+                >
+                  {mode.name}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 3, flexGrow: 1 }}
+                >
+                  Starting sequence length:{" "}
+                  <strong>{mode.start} numbers</strong>. Test your limits with
+                  dynamic timing rules.
+                </Typography>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={() => onSelectMode(key)}
+                  sx={{
+                    bgcolor: mode.color,
+                    fontWeight: "bold",
+                    textTransform: "none",
+                    "&:hover": { bgcolor: mode.color, opacity: 0.9 },
+                  }}
+                >
+                  Play {mode.name}
+                </Button>
+              </CardContent>
+            </Card>
+          </Box>
         ))}
       </Box>
     </Box>
