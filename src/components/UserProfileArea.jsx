@@ -1,370 +1,527 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
-  Tabs,
-  Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Avatar,
-  Chip,
   Button,
-  CircularProgress,
+  Paper,
+  TextField,
+  Avatar,
+  Divider,
 } from "@mui/material";
-import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import ShareIcon from "@mui/icons-material/Share";
-import { MODES } from "../config/constants";
-import { getLeaderboard, getUserRank } from "../services/api";
+import {
+  fetchPublicProfileBySlug,
+  fetchUserProfileData,
+  updateUserProfile,
+} from "../services/api";
 import { toast } from "react-toastify";
+import html2canvas from "html2canvas"; // Used for card downloading
 
-export default function ScoreboardHub({ region, user, onSelectPublicProfile }) {
+export default function UserProfileArea({
+  user,
+  region,
+  profileSlugToView,
+  onImageUpload,
+  onSignOut,
+  onBack,
+}) {
   const navigate = useNavigate();
-  const [selectedMode, setSelectedMode] = useState("easy");
-  const [leaderboardType, setLeaderboardType] = useState("all"); // 'all', 'weekly', 'monthly', 'seasonal'
-  const [leaderboardData, setLeaderboardData] = useState([]);
-  const [seasonStartedAt, setSeasonStartedAt] = useState(null);
-  const [seasonEndsAt, setSeasonEndsAt] = useState(null);
-  const [userRankData, setUserRankData] = useState(null);
+  const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
+  // Editable form states
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const cardRef = useRef(null);
+
+  // Determine whose profile is being loaded
   useEffect(() => {
-    fetchLeaderboardData();
-  }, [selectedMode, leaderboardType, region]);
+    async function loadProfile() {
+      setLoading(true);
+      setNotFound(false);
 
-  const fetchLeaderboardData = async () => {
-    setLoading(true);
-    try {
-      const res = await getLeaderboard({
-        mode: selectedMode,
-        type: leaderboardType,
-        region,
-        limit: 100,
-      });
-
-      if (res && res.success) {
-        setLeaderboardData(res.leaderboard || []);
-        setSeasonStartedAt(res.seasonStartedAt || null);
-        setSeasonEndsAt(res.seasonEndsAt || null);
-      } else {
-        setLeaderboardData([]);
-        setSeasonStartedAt(null);
-        setSeasonEndsAt(null);
-      }
-
-      if (user && user.token) {
-        const rankRes = await getUserRank(user.token, region, selectedMode);
-        if (rankRes && rankRes.success) {
-          setUserRankData(rankRes);
+      if (profileSlugToView) {
+        // Viewing someone else's profile via slug
+        try {
+          const res = await fetchPublicProfileBySlug(profileSlugToView);
+          if (res && res.success && res.profile) {
+            setProfileData(res.profile);
+          } else {
+            setNotFound(true);
+          }
+        } catch (err) {
+          setNotFound(true);
         }
+      } else if (user?.token) {
+        // Viewing logged-in user's own profile
+        try {
+          const res = await fetchUserProfileData(user.token);
+          if (res && res.success && res.user) {
+            setProfileData(res.user);
+            const parts = (res.user.name || "").split(" ");
+            setFirstName(parts[0] || res.user.first_name || "");
+            setLastName(parts.slice(1).join(" ") || res.user.last_name || "");
+          } else if (user) {
+            // Fallback to active session user object if backend fetch fails
+            setProfileData(user);
+            const parts = (user.name || "").split(" ");
+            setFirstName(parts[0] || "");
+            setLastName(parts.slice(1).join(" ") || "");
+          } else {
+            setNotFound(true);
+          }
+        } catch (err) {
+          setNotFound(true);
+        }
+      } else {
+        setNotFound(true);
       }
-    } catch (err) {
-      console.error("Error loading leaderboard:", err);
-      toast.error("Failed to load leaderboard scores.");
-    } finally {
       setLoading(false);
+    }
+    loadProfile();
+  }, [profileSlugToView, user]);
+
+  // Update browser URL to support /profile/nameslug without crashing single-page app state
+  useEffect(() => {
+    if (profileSlugToView) {
+      window.history.replaceState(null, "", `/profile/${profileSlugToView}`);
+    } else {
+      window.history.replaceState(null, "", `/profile`);
+    }
+    return () => {
+      window.history.replaceState(null, "", `/`);
+    };
+  }, [profileSlugToView]);
+
+  // Check if the viewer is the absolute owner of this profile
+  const isOwner =
+    user &&
+    profileData &&
+    (user.id === profileData.id || user.email === profileData.email);
+
+  // Handle saving editable details
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!user?.token) return;
+
+    const updatedInfo = { firstName, lastName };
+    const res = await updateUserProfile(updatedInfo, user.token);
+    if (res && res.success) {
+      toast.success("Profile updated successfully!");
+      setProfileData((prev) => ({
+        ...prev,
+        name: `${firstName} ${lastName}`.trim(),
+        profileUrl: res.profile?.profileUrl || prev.profileUrl,
+      }));
+    } else {
+      toast.error(res?.error || "Failed to update profile.");
     }
   };
 
-  const handleCopyProfileLink = (profileUrl, e) => {
-    e.stopPropagation(); // Prevents row click navigation when clicking the share button
-    const fullUrl = `${window.location.origin}/profile/${profileUrl}`;
+  // Copy Profile Link handler
+  const handleCopySlugLink = () => {
+    const slug = profileData?.profileUrl;
+    if (!slug) return;
+    const fullUrl = `${window.location.origin}/profile/${slug}`;
     navigator.clipboard.writeText(fullUrl);
     toast.success("Public profile link copied to clipboard!");
   };
 
-  const handleRowClick = (profileUrl) => {
-    if (!profileUrl) return;
-    // Route cleanly using React Router or fallback callback
-    if (onSelectPublicProfile) {
-      onSelectPublicProfile(profileUrl);
-    } else {
-      navigate(`/profile/${profileUrl}`);
+  // Download Gamer Card handler (Strictly restricted to Owner)
+  const handleDownloadCard = async () => {
+    if (!isOwner) {
+      toast.error("You cannot download another user's gamer card!");
+      return;
+    }
+    if (!cardRef.current) return;
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 2,
+        backgroundColor: "#0f172a",
+      });
+      const image = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = image;
+      a.download = `${profileData?.name || "gamer"}_card.png`;
+      a.click();
+      toast.success("Gamer card downloaded!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to download gamer card.");
     }
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ textAlign: "center", py: 8 }}>
+        <Typography color="text.secondary">Loading profile...</Typography>
+      </Box>
+    );
+  }
+
+  // 🛑 404 NOT FOUND SCREEN (If account slug doesn't exist)
+  if (notFound || !profileData) {
+    return (
+      <Box
+        sx={{
+          maxWidth: "500px",
+          mx: "auto",
+          mt: { xs: 4, md: 8 },
+          p: 4,
+          textAlign: "center",
+          bgcolor: "background.paper",
+          borderRadius: 4,
+          border: "1px solid rgba(239, 68, 68, 0.2)",
+        }}
+      >
+        <Typography variant="h4" fontWeight="900" color="#f87171" gutterBottom>
+          404 - Account Not Found
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          The player profile or username slug you are looking for does not exist
+          or may have been removed.
+        </Typography>
+        <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => navigate("/")}
+            sx={{ textTransform: "none", fontWeight: "bold" }}
+          >
+            ← Return to Home
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={onBack}
+            sx={{ textTransform: "none", fontWeight: "bold" }}
+          >
+            Go Back
+          </Button>
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <Box
       sx={{
-        maxWidth: 950,
+        maxWidth: "700px",
         mx: "auto",
-        py: { xs: 2, md: 4 },
-        px: { xs: 1.5, md: 0 },
+        mt: { xs: 2, md: 4 },
+        p: { xs: 2, md: 3 },
+        minWidth: "300px",
       }}
     >
-      {/* Header */}
-      <Box sx={{ textAlign: "center", mb: 4 }}>
-        <Typography
-          variant="h3"
-          sx={{
-            fontWeight: 900,
-            mb: 1,
-            fontSize: { xs: "2rem", sm: "2.5rem" },
-          }}
-        >
-          Global Leaderboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Live rankings across all regions and game modes.
-        </Typography>
-      </Box>
-
-      {/* Mode Selection Tabs */}
+      {/* Top Header Navigation */}
       <Box
         sx={{
           display: "flex",
-          justifyContent: "center",
-          mb: 3,
-          overflowX: "auto",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4,
         }}
       >
-        <Tabs
-          value={selectedMode}
-          onChange={(e, val) => setSelectedMode(val)}
-          variant="scrollable"
-          scrollButtons="auto"
+        <Typography variant="h5" fontWeight="bold">
+          {profileData?.name
+            ? `${profileData.name}'s Profile`
+            : "Player Profile"}
+        </Typography>
+        <Button
+          variant="outlined"
+          onClick={onBack}
+          size="small"
+          sx={{ textTransform: "none", fontWeight: 600 }}
         >
-          {Object.entries(MODES).map(([key, mode]) => (
-            <Tab
-              key={key}
-              label={mode.name}
-              value={key}
-              sx={{ fontWeight: "bold" }}
-            />
-          ))}
-        </Tabs>
+          ← Back
+        </Button>
       </Box>
 
-      {/* Timeline Filter Tabs (All-Time, Weekly, Monthly, Seasonal) */}
-      <Box sx={{ display: "flex", justifyContent: "center", mb: 3 }}>
-        <Tabs
-          value={leaderboardType}
-          onChange={(e, val) => setLeaderboardType(val)}
-          textColor="secondary"
-          indicatorColor="secondary"
-        >
-          <Tab label="All-Time" value="all" />
-          <Tab label="Weekly" value="weekly" />
-          <Tab label="Monthly" value="monthly" />
-          <Tab label="Seasonal" value="seasonal" />
-        </Tabs>
-      </Box>
-
-      {/* Season Timer / Date Range Banner (Only renders when NOT 'all' time) */}
-      {leaderboardType !== "all" && seasonStartedAt && seasonEndsAt && (
+      {/* GAMER CARD CONTAINER (Captured for Download) */}
+      <Box
+        ref={cardRef}
+        sx={{
+          p: 3,
+          borderRadius: 4,
+          bgcolor: "background.paper",
+          border: "1px solid rgba(59, 130, 246, 0.3)",
+          boxShadow: "0 0 25px rgba(59, 130, 246, 0.15)",
+          textAlign: "center",
+          position: "relative",
+          mb: 3,
+        }}
+      >
         <Box
           sx={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            bgcolor: "rgba(59, 130, 246, 0.08)",
-            border: "1px solid rgba(59, 130, 246, 0.2)",
-            borderRadius: 3,
+            mb: 2,
+          }}
+        >
+          <Typography
+            variant="caption"
+            fontWeight="bold"
+            color="primary.main"
+            sx={{ letterSpacing: 1 }}
+          >
+            ⚡ Number Flash
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              bgcolor: "rgba(59,130,246,0.1)",
+              borderRadius: 1,
+              color: "primary.main",
+              fontWeight: "bold",
+            }}
+          >
+            📍 {region.toUpperCase()}
+          </Typography>
+        </Box>
+
+        <Avatar
+          src={
+            profileData?.avatar ||
+            profileData?.avatar_url ||
+            "https://i.pravatar.cc/150?img=33"
+          }
+          alt={profileData?.name}
+          sx={{
+            width: 80,
+            height: 80,
+            mx: "auto",
+            mb: 2,
+            border: "2px solid #3b82f6",
+          }}
+        />
+
+        <Typography variant="h6" fontWeight="bold">
+          {profileData?.name || "Player"}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {profileData?.email || ""}
+        </Typography>
+
+        {/* Stats Row */}
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 2,
+            my: 3,
+          }}
+        >
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              bgcolor: "rgba(0,0,0,0.2)",
+              borderRadius: 2,
+              border: "1px solid rgba(255,255,255,0.05)",
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              WIN STREAK
+            </Typography>
+            <Typography variant="h6" fontWeight="800" color="#fbbf24">
+              {profileData?.streak || 0} Days
+            </Typography>
+          </Paper>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              bgcolor: "rgba(0,0,0,0.2)",
+              borderRadius: 2,
+              border: "1px solid rgba(255,255,255,0.05)",
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              RANK TIER
+            </Typography>
+            <Typography variant="h6" fontWeight="800" color="#38bdf8">
+              {profileData?.rank || "UNRANKED"}
+            </Typography>
+          </Paper>
+        </Box>
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          display="block"
+          sx={{ fontStyle: "italic", mb: 2 }}
+        >
+          Powered By Codyza
+        </Typography>
+      </Box>
+
+      {/* DOWNLOAD BUTTON (Visible only to the card owner) */}
+      {isOwner ? (
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={handleDownloadCard}
+          sx={{
+            mb: 4,
+            py: 1.5,
+            fontWeight: "bold",
+            textTransform: "none",
+            borderRadius: 2,
+          }}
+        >
+          Download Gamer Card (PNG) 📥
+        </Button>
+      ) : (
+        <Paper
+          elevation={0}
+          sx={{
             p: 2,
             mb: 4,
-            flexWrap: "wrap",
-            gap: 1.5,
+            textAlign: "center",
+            bgcolor: "rgba(239, 68, 68, 0.05)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            borderRadius: 2,
           }}
         >
-          <Typography variant="body2" color="text.secondary">
-            Season Start:{" "}
-            <strong>{new Date(seasonStartedAt).toLocaleDateString()}</strong>
+          <Typography variant="body2" color="#f87171">
+            🔒 You are viewing a public profile. Only the account owner can
+            download this Gamer Card.
           </Typography>
-          <Chip
-            label={`Active ${leaderboardType.toUpperCase()} Season`}
-            color="primary"
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: "bold" }}
-          />
-          <Typography variant="body2" color="text.secondary">
-            Season Ends:{" "}
-            <strong>{new Date(seasonEndsAt).toLocaleDateString()}</strong>
-          </Typography>
-        </Box>
+        </Paper>
       )}
 
-      {/* Active User Current Standing Card */}
-      {user && userRankData && (
-        <Box
+      {/* EDIT PROFILE & SLUG DISPLAY AREA (Strictly for Owner Account) */}
+      {isOwner && (
+        <Paper
+          component="form"
+          onSubmit={handleSaveProfile}
+          elevation={0}
           sx={{
-            bgcolor: "rgba(99, 102, 241, 0.08)",
-            border: "1px solid rgba(99, 102, 241, 0.25)",
+            p: 3,
+            bgcolor: "background.paper",
             borderRadius: 3,
-            p: 2.5,
+            border: "1px solid rgba(255, 255, 255, 0.08)",
             mb: 4,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 2,
-            cursor: user.profileUrl ? "pointer" : "default",
           }}
-          onClick={() => user.profileUrl && handleRowClick(user.profileUrl)}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Avatar src={user.avatar} sx={{ width: 44, height: 44 }} />
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                {user.name} (Your Current Rank)
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Region: {region} | High Score: {userRankData.score || 0}
-              </Typography>
-            </Box>
+          <Typography
+            variant="subtitle1"
+            fontWeight="bold"
+            gutterBottom
+            sx={{ color: "primary.main" }}
+          >
+            ✏️ Edit Profile Details
+          </Typography>
+          <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.08)" }} />
+
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <TextField
+              label="First Name"
+              variant="outlined"
+              size="small"
+              fullWidth
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+            <TextField
+              label="Last Name"
+              variant="outlined"
+              size="small"
+              fullWidth
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
           </Box>
-          <Chip
-            icon={<EmojiEventsIcon />}
-            label={
-              userRankData.rank ? `#${userRankData.rank} Global` : "Unranked"
-            }
-            color="secondary"
-            sx={{ fontWeight: "bold", fontSize: "0.95rem", py: 2, px: 1 }}
-          />
-        </Box>
+
+          <Box sx={{ display: "flex", gap: 2, mt: 3 }}>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              size="small"
+              sx={{ textTransform: "none", fontWeight: "bold" }}
+            >
+              Save Profile Details
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              onClick={onSignOut}
+              sx={{ textTransform: "none", fontWeight: "bold", ml: "auto" }}
+            >
+              Sign Out
+            </Button>
+          </Box>
+        </Paper>
       )}
 
-      {/* Leaderboard Table */}
-      <TableContainer
-        component={Paper}
-        sx={{
-          bgcolor: "rgba(255,255,255,0.02)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 3,
-        }}
-      >
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 700, width: "80px" }}>
-                Rank
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Player</TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Server
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="right">
-                Score
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="right">
-                Share
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
-                  <CircularProgress size={32} />
-                </TableCell>
-              </TableRow>
-            ) : leaderboardData.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  align="center"
-                  sx={{ py: 5, color: "text.secondary" }}
-                >
-                  No high scores recorded for this filter yet. Be the first to
-                  set a record!
-                </TableCell>
-              </TableRow>
-            ) : (
-              leaderboardData.map((row, idx) => {
-                const rank = idx + 1;
-                return (
-                  <TableRow
-                    key={row.userId || idx}
-                    hover
-                    onClick={() => handleRowClick(row.profileUrl)}
-                    sx={{
-                      cursor: row.profileUrl ? "pointer" : "default",
-                      bgcolor:
-                        user && user.id === row.userId
-                          ? "rgba(59, 130, 246, 0.12)"
-                          : "transparent",
-                    }}
-                  >
-                    <TableCell
-                      sx={{ fontWeight: 800, fontFamily: "monospace" }}
-                    >
-                      {rank === 1
-                        ? "🥇"
-                        : rank === 2
-                          ? "🥈"
-                          : rank === 3
-                            ? "🥉"
-                            : `#${rank}`}
-                    </TableCell>
-                    <TableCell>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 1.5,
-                        }}
-                      >
-                        <Avatar
-                          src={row.avatar}
-                          sx={{ width: 34, height: 34 }}
-                        />
-                        <Box>
-                          <Typography
-                            sx={{ fontWeight: 700, fontSize: "0.95rem" }}
-                          >
-                            {row.username}
-                          </Typography>
-                          {row.streak > 0 && (
-                            <Typography variant="caption" color="warning.main">
-                              🔥 {row.streak} Season Streak
-                            </Typography>
-                          )}
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Chip
-                        label={row.region}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontFamily: "monospace",
-                        fontWeight: 900,
-                        fontSize: "1.1rem",
-                        color: "primary.main",
-                      }}
-                    >
-                      {row.score}
-                    </TableCell>
-                    <TableCell align="right">
-                      {row.profileUrl && (
-                        <Button
-                          size="small"
-                          onClick={(e) =>
-                            handleCopyProfileLink(row.profileUrl, e)
-                          }
-                          sx={{ minWidth: "auto", p: 0.8 }}
-                        >
-                          <ShareIcon fontSize="small" />
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {/* 🚀 PUBLIC SLUG LINK BOX (Visible only to Owner when a slug exists) */}
+      {isOwner && profileData?.profileUrl && (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 3,
+            bgcolor: "rgba(59, 130, 246, 0.05)",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+            borderRadius: 3,
+          }}
+        >
+          <Typography
+            variant="subtitle2"
+            fontWeight="bold"
+            color="primary.main"
+            gutterBottom
+          >
+            🔗 Your Public Profile Share Link
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Share this link with friends or use it anywhere to show off your
+            rank and win streak!
+          </Typography>
+
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              bgcolor: "rgba(0,0,0,0.3)",
+              p: 1.5,
+              borderRadius: 2,
+              border: "1px solid rgba(255,255,255,0.08)",
+              overflowX: "auto",
+            }}
+          >
+            <Typography
+              variant="body2"
+              sx={{
+                fontFamily: "monospace",
+                color: "#38bdf8",
+                fontWeight: "bold",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {window.location.origin}/profile/{profileData.profileUrl}
+            </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleCopySlugLink}
+              sx={{
+                ml: "auto",
+                textTransform: "none",
+                fontWeight: "bold",
+                minWidth: "90px",
+              }}
+            >
+              Copy Link
+            </Button>
+          </Box>
+        </Paper>
+      )}
     </Box>
   );
 }
