@@ -1,76 +1,24 @@
-import { toast } from "react-toastify";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-export async function submitScore(scoreData, token) {
-  if (!token) return { success: false, reason: "unauthenticated" };
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/scores`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(scoreData),
-    });
-
-    if (res.status === 401) return { success: false, reason: "unauthorized" };
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to submit score");
-
-    if (data.updated) {
-      toast.success("🎉 Personal High Score registered to global leaderboard!");
-    }
-
-    return { success: true, data };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+export function generateProfileSlug(firstName = "", lastName = "") {
+  const cleanFirst = firstName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  const cleanLast = lastName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  const base = `${cleanFirst}-${cleanLast}`.replace(/^-+|-+$/g, "");
+  return base || "gamer-profile";
 }
 
-export async function reportRoundComplete(
-  { mode, score, roundReached, timeTakenSeconds },
-  token,
-) {
-  if (!token) return;
-  const currentSeasonId = new Date().toISOString().slice(0, 7);
-
-  try {
-    await fetch(`${API_BASE_URL}/api/stats/round-complete`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ mode, timeTakenSeconds }),
-    });
-
-    await fetch(`${API_BASE_URL}/api/stats/mode-achievement`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        mode,
-        score,
-        roundReached,
-        seasonId: currentSeasonId,
-      }),
-    });
-  } catch (err) {
-    console.error("Failed to report round metrics:", err);
-  }
-}
-
+/**
+ * Fetch authenticated user's private profile data from backend
+ */
 export async function fetchUserProfileData(token) {
-  if (!token) return null;
-
   try {
-    const res = await fetch(`${API_BASE_URL}/api/user/profile-data`, {
+    const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -78,105 +26,241 @@ export async function fetchUserProfileData(token) {
       },
     });
 
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    return await res.json();
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    return await response.json();
   } catch (err) {
-    console.error("Profile fetch error:", err.message);
-    return null;
+    console.error("Error fetching user profile data:", err);
+    return { success: false, error: err.message };
   }
 }
 
-export async function updateUserProfile({ firstName, lastName }, token) {
-  if (!token) return { success: false };
-
+/**
+ * Fetch public profile details by profile URL slug (No Auth Required)
+ */
+export async function fetchPublicProfileBySlug(slug) {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
+    const response = await fetch(`${API_BASE_URL}/api/user/public/${slug}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Error fetching public profile:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Update authenticated user's profile details (First Name, Last Name, Profile URL)
+ */
+export async function updateUserProfile(data, token) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ firstName, lastName }),
+      body: JSON.stringify({
+        firstName: data.firstName || data.first_name || "",
+        lastName: data.lastName || data.last_name || "",
+        profileUrl:
+          data.profileUrl ||
+          data.profile_url ||
+          generateProfileSlug(
+            data.firstName || data.first_name,
+            data.lastName || data.last_name,
+          ),
+      }),
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to update profile");
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
 
-    toast.success("Profile name updated successfully!");
-    return { success: true, data };
+    return await response.json();
   } catch (err) {
-    toast.error(err.message || "Error updating name");
+    console.error("Error updating user profile:", err);
     return { success: false, error: err.message };
   }
 }
 
-export async function fetchLeaderboard({ region, type, mode }) {
+/**
+ * Upload profile avatar image
+ */
+export async function uploadProfilePicture(file, token) {
   try {
-    const params = new URLSearchParams({
-      region: region || "All Servers (Mixed)",
-      type: type || "all",
-      mode: mode || "expert",
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result;
+
+        if (token) {
+          try {
+            await fetch(`${API_BASE_URL}/api/user/avatar`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ avatar: base64Data }),
+            });
+          } catch (e) {
+            console.warn(
+              "Avatar upload to server failed, using local base64 fallback.",
+            );
+          }
+        }
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
-
-    const res = await fetch(`${API_BASE_URL}/api/leaderboard?${params.toString()}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to fetch leaderboard");
-    return data.leaderboard || [];
   } catch (err) {
-    return [];
-  }
-}
-
-export async function fetchUserRank({ token, mode, region }) {
-  if (!token) return null;
-
-  try {
-    const params = new URLSearchParams({ mode, region });
-    const res = await fetch(`${API_BASE_URL}/api/user/rank?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (res.status === 401) return null;
-
-    const data = await res.json();
-    if (!res.ok) return null;
-    return data;
-  } catch (err) {
+    console.error("Error uploading profile picture:", err);
     return null;
   }
 }
 
-export async function fetchHallOfFameArchives({ season_type, mode }) {
+/**
+ * Submit game round score to server leaderboard
+ */
+export async function submitScore(scoreData, token) {
   try {
-    const params = new URLSearchParams({ season_type, mode });
-    const res = await fetch(
-      `${API_BASE_URL}/api/leaderboard/archives?${params.toString()}`,
-    );
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to fetch archives");
-    return data.archives || [];
+    const response = await fetch(`${API_BASE_URL}/api/scores`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        mode: scoreData.mode,
+        score: scoreData.score,
+        region: scoreData.region,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    return await response.json();
   } catch (err) {
-    return [];
+    console.error("Error submitting score:", err);
+    return { success: false, error: err.message };
   }
 }
 
-export async function uploadProfilePicture(file) {
-  const MAX_SIZE_BYTES = 3 * 1024 * 1024;
-  if (file.size > MAX_SIZE_BYTES) {
-    toast.error("Image file size exceeds the 3 MB limit!");
-    return null;
-  }
+/**
+ * Sync offline/localStorage scores when logging in
+ */
+export async function syncLocalScoresToServer(scoresMap, token) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/scores/sync-local`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ localScores: scoresMap }),
+    });
 
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      toast.success("Profile picture updated successfully!");
-      resolve(reader.result);
-    };
-    reader.onerror = () => {
-      toast.error("Failed to process profile image.");
-      resolve(null);
-    };
-    reader.readAsDataURL(file);
-  });
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Error syncing local scores to server:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fetch top leaderboard entries for a given region, mode, and timeline type
+ */
+export async function fetchLeaderboard({
+  region = "Asia",
+  mode = "easy",
+  type = "all",
+  limit = 100,
+} = {}) {
+  try {
+    const query = new URLSearchParams({ region, mode, type, limit }).toString();
+    const response = await fetch(`${API_BASE_URL}/api/leaderboard?${query}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Error fetching leaderboard:", err);
+    return { success: false, leaderboard: [] };
+  }
+}
+
+export const getLeaderboard = fetchLeaderboard;
+
+/**
+ * Fetch individual authenticated user rank
+ */
+export async function getUserRank(token, region = "Asia", mode = "easy") {
+  try {
+    const query = new URLSearchParams({ region, mode }).toString();
+    const response = await fetch(`${API_BASE_URL}/api/user/rank?${query}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Error fetching user rank:", err);
+    return { success: false, rank: "UNRANKED" };
+  }
+}
+
+/**
+ * Fetch overall Hall of Fame all-time top scores
+ */
+export async function fetchHallOfFame() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/leaderboard/halloffame`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Error fetching Hall of Fame:", err);
+    return { success: false, hallOfFame: [] };
+  }
 }
