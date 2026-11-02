@@ -17,6 +17,7 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { toast } from "react-toastify";
 import { supabase } from "../config/supabaseClient";
+import { syncLocalScoresToServer } from "../services/api";
 
 export default function AuthModal({ open, onClose, onAuthSuccess }) {
   const [isSignup, setIsSignup] = useState(false);
@@ -28,6 +29,21 @@ export default function AuthModal({ open, onClose, onAuthSuccess }) {
 
   const handleClickShowPassword = () => setShowPassword((show) => !show);
   const handleMouseDownPassword = (event) => event.preventDefault();
+
+  const handleSyncScores = async (token) => {
+    try {
+      const rawScores = localStorage.getItem("number_flash_scores");
+      if (!rawScores) return;
+
+      const localScoresMap = JSON.parse(rawScores);
+
+      if (Object.keys(localScoresMap).length > 0) {
+        await syncLocalScoresToServer(localScoresMap, token);
+      }
+    } catch (err) {
+      console.error("Failed to sync offline scores after auth:", err);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -71,13 +87,13 @@ export default function AuthModal({ open, onClose, onAuthSuccess }) {
         return;
       }
 
+      await handleSyncScores(session.access_token);
+
       const fullName = isSignup
         ? `${firstName} ${lastName}`
         : user.user_metadata?.first_name
           ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ""}`.trim()
           : email.split("@")[0];
-
-      const profileSlug = fullName.toLowerCase().replace(/\s+/g, "-");
 
       onAuthSuccess({
         id: user.id,
